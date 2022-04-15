@@ -26,10 +26,10 @@ export class HomebrewMetricsPublisher extends Construct {
         });
         authTokenSecureValue.grantRead(lambdaGoFn)
 
-        // Run at 10 minutes past every hour
+        // Run at 10 minutes past every four hours
         // See https://docs.aws.amazon.com/lambda/latest/dg/tutorial-scheduled-events-schedule-expressions.html
         const rule = new events.Rule(this, 'SchedulingRule', {
-            schedule: events.Schedule.expression('cron(/10 * ? * * *)')
+            schedule: events.Schedule.expression('cron(/10 */4 ? * * *)')
         })
 
         rule.addTarget(new targets.LambdaFunction(lambdaGoFn))
