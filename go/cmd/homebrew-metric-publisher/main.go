@@ -20,7 +20,9 @@ const dolthubMergeUrlFormat = "https://www.dolthub.com/api/v1alpha1/%s/%s/write/
 const dolthubReadUrlFormat = "https://www.dolthub.com/api/v1alpha1/%s/%s/%s?q=%s"
 
 const homebrewUrlFormat = "https://formulae.brew.sh/api/formula/%s.json"
-const homebrewPackage = "dolt"
+
+const homebrewFormulaEnv = "homebrewFormula"
+const dolthubAuthTokenParameterNameEnv = "dolthubAuthTokenParameterName"
 
 var authToken string
 
@@ -57,7 +59,7 @@ func unmarshall30dInstalls(result map[string]interface{}) int {
 	analytics := result["analytics"].(map[string]interface{})
 	install := analytics["install"].(map[string]interface{})
 	thirtyDays := install["30d"].(map[string]interface{})
-	installsIn30days := int(thirtyDays[homebrewPackage].(float64))
+	installsIn30days := int(thirtyDays[os.Getenv(homebrewFormulaEnv)].(float64))
 
 	fmt.Println("Total Homebrew Installs in Past 30 Days: " + strconv.Itoa(installsIn30days))
 
@@ -91,7 +93,7 @@ func loadFromParameterStore(parameterName string) (*string, error) {
 }
 
 func main() {
-	homebrewUrl := fmt.Sprintf(homebrewUrlFormat, homebrewPackage)
+	homebrewUrl := fmt.Sprintf(homebrewUrlFormat, os.Getenv(homebrewFormulaEnv))
 	response, statusCode := get(homebrewUrl, nil)
 
 	// print response body
@@ -110,8 +112,7 @@ func main() {
 	installs := unmarshall30dInstalls(document)
 
 	// Write to DoltHub API
-	// TODO: Make parameter name configurable from infra code
-	authTokenPointer, err := loadFromParameterStore("dolthub-auth-token")
+	authTokenPointer, err := loadFromParameterStore(os.Getenv(dolthubAuthTokenParameterNameEnv))
 	if err != nil {
 		panic(err)
 	}
