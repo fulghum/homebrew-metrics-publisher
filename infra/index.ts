@@ -8,6 +8,9 @@ export class HomebrewMetricsPublisherStack extends cdk.Stack {
     new HomebrewMetricsPublisher(this, "HomebrewMetricsUploader", {
       homebrewFormula: "dolt",
       dolthubAuthTokenParameterName: "dolthub-auth-token",
+      dolthubOwner: "jfulghum",
+      dolthubDatabase: "test",
+      dolthubBranch: "main", // TODO: Default to "main"?
     })
   }
 }

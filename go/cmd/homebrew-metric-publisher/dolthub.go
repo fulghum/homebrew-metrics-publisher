@@ -5,24 +5,26 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 )
 
 const dolthubMergeUrlFormat = "https://www.dolthub.com/api/v1alpha1/%s/%s/write/%s/%s"
 const dolthubWriteUrlFormat = "https://www.dolthub.com/api/v1alpha1/%s/%s/write/%s/%s?q=%s"
 const dolthubReadUrlFormat = "https://www.dolthub.com/api/v1alpha1/%s/%s/%s?q=%s"
 
+// dolthubAuthToken holds the value loaded from AWS SSM Parameter Store for the AUTH_TOKEN_PARAMETER environment variable
 var dolthubAuthToken string
 
-// RunQueryOnBranch executes the specified query on a new toBranch created from fromBranch on the specified database.
-func RunQueryOnBranch(owner, repo, fromBranch, toBranch, query string) {
-	doltHubWriteUrl := fmt.Sprintf(dolthubWriteUrlFormat, owner, repo, fromBranch, toBranch, url.QueryEscape(query))
+// RunQueryOnNewBranch executes the specified query on a new branch created from a source branch on the specified database.
+func RunQueryOnNewBranch(owner, repo, sourceBranch, newBranch, query string) {
+	doltHubWriteUrl := fmt.Sprintf(dolthubWriteUrlFormat,
+		owner, repo, url.QueryEscape(sourceBranch), url.QueryEscape(newBranch), url.QueryEscape(query))
 	sendDoltHubRequest(doltHubWriteUrl)
 }
 
-// Merge attempts to Merge the specified toBranch to fromBranch on the specified database.
-func Merge(owner, repo, toBranch, fromBranch string) {
-	doltHubMergeUrl := fmt.Sprintf(dolthubMergeUrlFormat, owner, repo, toBranch, fromBranch)
+// Merge attempts to merge the tip of fromBranch into toBranch on the specified database.
+func Merge(owner, repo, fromBranch, toBranch string) {
+	doltHubMergeUrl := fmt.Sprintf(dolthubMergeUrlFormat,
+		owner, repo, url.QueryEscape(fromBranch), url.QueryEscape(toBranch))
 	sendDoltHubRequest(doltHubMergeUrl)
 }
 
@@ -31,7 +33,7 @@ func sendDoltHubRequest(url string) {
 
 	// load the auth token from AWS SSM Parameter Store if it isn't loaded yet
 	if len(dolthubAuthToken) > 0 {
-		authTokenPointer, err := LoadParameter(os.Getenv(dolthubAuthTokenParameterNameEnv))
+		authTokenPointer, err := LoadParameter(dolthubAuthTokenParameterName)
 		if err != nil {
 			panic(err)
 		}

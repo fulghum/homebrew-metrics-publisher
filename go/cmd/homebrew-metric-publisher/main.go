@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 	"os"
 	"strconv"
 	"time"
@@ -13,14 +12,16 @@ import (
 
 const homebrewUrlFormat = "https://formulae.brew.sh/api/formula/%s.json"
 
-const homebrewFormulaEnv = "homebrewFormula"
-const dolthubAuthTokenParameterNameEnv = "dolthubAuthTokenParameterName"
-
-// TODO: Make repository configurable from infra construct // NEXT
-var owner, repo, fromBranch, toBranch = "jfulghum", "test", "main", url.QueryEscape("homebrew/publish")
+var (
+	owner                         = os.Getenv("OWNER")
+	database                      = os.Getenv("DATABASE")
+	sourceBranch                  = os.Getenv("SOURCE_BRANCH")
+	homebrewFomula                = os.Getenv("HOMEBREW_FORMULA")
+	dolthubAuthTokenParameterName = os.Getenv("AUTH_TOKEN_PARAMETER")
+)
 
 func main() {
-	homebrewUrl := fmt.Sprintf(homebrewUrlFormat, os.Getenv(homebrewFormulaEnv))
+	homebrewUrl := fmt.Sprintf(homebrewUrlFormat, homebrewFomula)
 	response, statusCode := get(homebrewUrl, nil)
 	logJsonResponseBody(response, statusCode)
 
@@ -30,12 +31,12 @@ func main() {
 	installs := unmarshall30dInstalls(document)
 
 	// Update on a branch on DoltHub
-	RunQueryOnBranch(owner, repo, fromBranch, toBranch,
+	RunQueryOnNewBranch(owner, database, sourceBranch, "homebrew/publish",
 		fmt.Sprintf("insert into homebrew_metrics values(NOW(), %d);", installs))
 
 	// Merge DoltHub Change
 	pause() // TODO: Switch to polling
-	Merge(owner, repo, toBranch, fromBranch)
+	Merge(owner, database, "homebrew/publish", sourceBranch)
 }
 
 func unmarshall30dInstalls(result map[string]interface{}) int {
@@ -47,7 +48,7 @@ func unmarshall30dInstalls(result map[string]interface{}) int {
 	analytics := result["analytics"].(map[string]interface{})
 	install := analytics["install"].(map[string]interface{})
 	thirtyDays := install["30d"].(map[string]interface{})
-	installsIn30days := int(thirtyDays[os.Getenv(homebrewFormulaEnv)].(float64))
+	installsIn30days := int(thirtyDays[homebrewFomula].(float64))
 
 	fmt.Println("Total Homebrew Installs in Past 30 Days: " + strconv.Itoa(installsIn30days))
 

@@ -5,8 +5,11 @@ import ssm = require('aws-cdk-lib/aws-ssm');
 import {Construct} from "constructs";
 
 export interface HomebrewMetricsPublisherProps {
-    homebrewFormula: string;
-    dolthubAuthTokenParameterName: string;
+    homebrewFormula:               string
+    dolthubAuthTokenParameterName: string
+    dolthubOwner:                  string
+    dolthubDatabase:               string
+    dolthubBranch:                 string
 }
 
 export class HomebrewMetricsPublisher extends Construct {
@@ -16,8 +19,11 @@ export class HomebrewMetricsPublisher extends Construct {
         const lambdaGoFn = new lambda_go.GoFunction(this, 'HomebrewStatsUploader', {
             entry: "../go/cmd/homebrew-metric-publisher",
             environment: {
-                "homebrewFormula": props.homebrewFormula,
-                "dolthubAuthTokenParameterName": props.dolthubAuthTokenParameterName,
+                "HOMEBREW_FORMULA"     : props.homebrewFormula,
+                "AUTH_TOKEN_PARAMETER" : props.dolthubAuthTokenParameterName,
+                "OWNER"                : props.dolthubOwner,
+                "DATABASE"             : props.dolthubDatabase,
+                "BRANCH"               : props.dolthubBranch,
             }
         })
 
