@@ -2,12 +2,8 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/ssm"
-	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -15,39 +11,31 @@ import (
 	"time"
 )
 
-const dolthubWriteUrlFormat = "https://www.dolthub.com/api/v1alpha1/%s/%s/write/%s/%s?q=%s"
-const dolthubMergeUrlFormat = "https://www.dolthub.com/api/v1alpha1/%s/%s/write/%s/%s"
-const dolthubReadUrlFormat = "https://www.dolthub.com/api/v1alpha1/%s/%s/%s?q=%s"
-
 const homebrewUrlFormat = "https://formulae.brew.sh/api/formula/%s.json"
 
 const homebrewFormulaEnv = "homebrewFormula"
 const dolthubAuthTokenParameterNameEnv = "dolthubAuthTokenParameterName"
 
-var authToken string
+// TODO: Make repository configurable from infra construct // NEXT
+var owner, repo, fromBranch, toBranch = "jfulghum", "test", "main", url.QueryEscape("homebrew/publish")
 
-func get(url string, headers map[string]string) ([]byte, int) {
-	client := &http.Client{}
+func main() {
+	homebrewUrl := fmt.Sprintf(homebrewUrlFormat, os.Getenv(homebrewFormulaEnv))
+	response, statusCode := get(homebrewUrl, nil)
+	logJsonResponseBody(response, statusCode)
 
-	req, err := http.NewRequest("GET", url, nil)
-	for key, value := range headers {
-		req.Header.Add(key, value)
-	}
-	response, err := client.Do(req)
-	if err != nil {
-		panic(err)
-	}
-	defer response.Body.Close()
+	// pull out the 30d installs
+	var document map[string]interface{}
+	json.Unmarshal(response, &document)
+	installs := unmarshall30dInstalls(document)
 
-	fmt.Println("Downloaded: ", url)
+	// Update on a branch on DoltHub
+	RunQueryOnBranch(owner, repo, fromBranch, toBranch,
+		fmt.Sprintf("insert into homebrew_metrics values(NOW(), %d);", installs))
 
-	reader := io.Reader(response.Body)
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		panic(err)
-	}
-
-	return data, response.StatusCode
+	// Merge DoltHub Change
+	pause() // TODO: Switch to polling
+	Merge(owner, repo, toBranch, fromBranch)
 }
 
 func unmarshall30dInstalls(result map[string]interface{}) int {
@@ -66,86 +54,21 @@ func unmarshall30dInstalls(result map[string]interface{}) int {
 	return installsIn30days
 }
 
-// loadFromParameterStore loads an encrypted parameter from AWS SSM Parameter Store.
-// We use Parameter Store instead of Secrets Manager since each secret costs $.40 a month to store.
-func loadFromParameterStore(parameterName string) (*string, error) {
-	cfg, err := config.LoadDefaultConfig(context.TODO(),
-		// Optionally use a shared config profile for local development
-		//config.WithSharedConfigProfile("jason+test@dolthub.com"),
-		// TODO: Make region configurable from infrastructure code
-		config.WithRegion("us-west-2"))
-	if err != nil {
-		return nil, err
-	}
-
-	// Create an SSM client
-	client := ssm.NewFromConfig(cfg)
-
-	output, err := client.GetParameter(context.TODO(), &ssm.GetParameterInput{
-		Name:           &parameterName,
-		WithDecryption: true,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return output.Parameter.Value, nil
-}
-
-func main() {
-	homebrewUrl := fmt.Sprintf(homebrewUrlFormat, os.Getenv(homebrewFormulaEnv))
-	response, statusCode := get(homebrewUrl, nil)
-
-	// print response body
+func logJsonResponseBody(response []byte, statusCode int) {
 	if statusCode == http.StatusOK {
 		jsonPrettyPrint(response)
 	} else {
 		fmt.Println(string(response))
-		panic("unable to download Homebrew metrics")
+		panic("Error executing request")
 	}
+}
 
-	// use json.Unmarshall to load into a map
-	var document map[string]interface{}
-	json.Unmarshal(response, &document)
-
-	// pull out the 30d installs
-	installs := unmarshall30dInstalls(document)
-
-	// Write to DoltHub API
-	authTokenPointer, err := loadFromParameterStore(os.Getenv(dolthubAuthTokenParameterNameEnv))
-	if err != nil {
-		panic(err)
-	}
-	authToken = *authTokenPointer
-
-	// TODO: Make repository configurable from infra construct
-	owner, repo, fromBranch, toBranch := "jfulghum", "test", "main", url.QueryEscape("homebrew/publish")
-	query := fmt.Sprintf("insert into homebrew_metrics values(NOW(), %d);", installs)
-	doltHubWriteUrl := fmt.Sprintf(dolthubWriteUrlFormat, owner, repo, fromBranch, toBranch, url.QueryEscape(query))
-	sendDoltHubRequest(doltHubWriteUrl)
-
-	// TODO: Poll for write status
+func pause() {
 	duration, err := time.ParseDuration("1s")
 	if err != nil {
 		panic(err)
 	}
 	time.Sleep(duration)
-
-	// Merge DoltHub Change
-	doltHubMergeUrl := fmt.Sprintf(dolthubMergeUrlFormat, owner, repo, toBranch, fromBranch)
-	sendDoltHubRequest(doltHubMergeUrl)
-}
-
-func sendDoltHubRequest(url string) {
-	headers := map[string]string{"authorization": authToken}
-
-	doltHubResponse, statusCode := get(url, headers)
-	if statusCode == http.StatusOK {
-		jsonPrettyPrint(doltHubResponse)
-	} else {
-		fmt.Println(string(doltHubResponse))
-		panic("unable to store results in DoltHub")
-	}
 }
 
 func jsonPrettyPrint(response []byte) {
