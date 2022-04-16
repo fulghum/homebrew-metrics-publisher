@@ -29,10 +29,8 @@ func Merge(owner, repo, fromBranch, toBranch string) {
 }
 
 func sendDoltHubRequest(url string) {
-	headers := map[string]string{"authorization": dolthubAuthToken}
-
 	// load the auth token from AWS SSM Parameter Store if it isn't loaded yet
-	if len(dolthubAuthToken) > 0 {
+	if len(dolthubAuthToken) == 0 {
 		authTokenPointer, err := LoadParameter(dolthubAuthTokenParameterName)
 		if err != nil {
 			panic(err)
@@ -40,6 +38,7 @@ func sendDoltHubRequest(url string) {
 		dolthubAuthToken = *authTokenPointer
 	}
 
+	headers := map[string]string{"authorization": dolthubAuthToken}
 	doltHubResponse, statusCode := get(url, headers)
 	if statusCode == http.StatusOK {
 		jsonPrettyPrint(doltHubResponse)

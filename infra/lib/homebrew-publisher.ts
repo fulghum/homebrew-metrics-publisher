@@ -23,7 +23,7 @@ export class HomebrewMetricsPublisher extends Construct {
                 "AUTH_TOKEN_PARAMETER" : props.dolthubAuthTokenParameterName,
                 "OWNER"                : props.dolthubOwner,
                 "DATABASE"             : props.dolthubDatabase,
-                "BRANCH"               : props.dolthubBranch,
+                "SOURCE_BRANCH"        : props.dolthubBranch,
             }
         })
 
