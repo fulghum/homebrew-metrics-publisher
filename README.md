@@ -7,4 +7,5 @@ Configuration
 
 Deploying
 ===
+* Make sure infra code has been compiled; `npm run watch` helps
 * Run `cdk deploy`

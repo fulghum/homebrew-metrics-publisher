@@ -3,4 +3,5 @@ cdk.out
 node_modules
 *~
 *.js
+.idea
 
